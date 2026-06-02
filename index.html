@@ -1362,7 +1362,11 @@ footer{background:var(--navy2);border-top:1px solid var(--border);padding:3rem 2
       onkeydown="if(event.key==='Enter')checkCode()">
     <button onclick="checkCode()" style="width:100%;background:var(--cyan);color:var(--navy);border:none;border-radius:var(--r8);padding:14px;font-family:var(--fm);font-size:0.82rem;letter-spacing:2px;font-weight:700;text-transform:uppercase;cursor:pointer;transition:background 0.2s;margin-bottom:1rem" onmouseover="this.style.background='#00b0d8'" onmouseout="this.style.background='var(--cyan)'">VERIFY CODE →</button>
     <p id="code-error" style="font-family:var(--fm);font-size:0.75rem;color:var(--red);letter-spacing:1px;display:none;margin-top:0.5rem">Incorrect code — contact the admin for your device-specific code.</p>
-    <p style="font-size:0.75rem;color:var(--white4);margin-top:1.25rem;line-height:1.6">This code is locked to your specific device.<br>Sharing it with others will not grant them access.</p>
+    <div style="margin-top:1.5rem;background:var(--navy3);border:1px solid var(--border2);border-radius:var(--r8);padding:1rem 1.25rem;text-align:left">
+      <div style="font-family:var(--fm);font-size:0.58rem;letter-spacing:2px;color:var(--white3);text-transform:uppercase;margin-bottom:0.5rem">Your Device Fingerprint</div>
+      <div id="fp-display" style="font-family:var(--fm);font-size:1.1rem;letter-spacing:4px;color:var(--cyan);font-weight:700;margin-bottom:0.5rem">calculating…</div>
+      <div style="font-size:0.73rem;color:var(--white3);line-height:1.6">Send this code to the admin to receive your access code.<br>This fingerprint is unique to your device and browser.</div>
+    </div>
   </div>
 
   <!-- SCREEN 2: Anthropic API key (shown after code verified) -->
@@ -1401,57 +1405,62 @@ footer{background:var(--navy2);border-top:1px solid var(--border);padding:3rem 2
 
 const SWIMIQ_MASTER_CODE = 'Daniel!2026MasterKey';
 
+// ─────────────────────────────────────────────
+// ADD USERS HERE:
+//   1. User opens the file — their fingerprint
+//      is shown ON SCREEN under the code input,
+//      and also in the browser console (F12).
+//   2. They send you that code (e.g. a3f9c812)
+//   3. You add a line below and give them a code
+// ─────────────────────────────────────────────
 const SWIMIQ_CODES = {
-  // 'fingerprint8hex': 'TheirCode',
-  // Example:
   // 'a3f9c812': 'SarahSwims2025',
   // '7e21b4f0': 'CoachMike99',
-  '583beb2a': 'DanielMac',
 };
 
 let ANTHROPIC_API_KEY = '';
 
-// ── Fingerprinting ──
-// Uses stable browser signals. Will produce the same hash
-// on the same browser/device every time.
+// ── Fingerprint: uses only rock-stable signals ──
+// userAgent + screen dimensions + timezone + hardwareConcurrency
+// Does NOT use canvas (varies by GPU driver), deviceMemory
+// (not available in all browsers), or platform (inconsistent).
 function buildFingerprint() {
   try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    ctx.textBaseline = 'top';
-    ctx.font = '14px Arial';
-    ctx.fillStyle = '#00d4ff';
-    ctx.fillText('SwimIQ2025', 2, 2);
-    ctx.fillStyle = '#f5a623';
-    ctx.fillRect(10, 10, 20, 20);
-    const canvasFp = canvas.toDataURL().slice(-80);
-
-    const raw = [
-      navigator.userAgent || '',
-      navigator.language || '',
-      (screen.width || 0) + 'x' + (screen.height || 0),
-      (screen.colorDepth || 0),
-      (new Date().getTimezoneOffset()),
-      (navigator.hardwareConcurrency || 0),
-      (navigator.deviceMemory || 0),
-      (navigator.platform || ''),
-      canvasFp
-    ].join('|||');
-
-    // djb2-style hash → 8 hex chars
-    let h = 5381;
+    const parts = [
+      navigator.userAgent,
+      screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+      String(new Date().getTimezoneOffset()),
+      String(navigator.hardwareConcurrency || 0),
+      navigator.language
+    ];
+    const raw = parts.join('||');
+    // Simple but consistent hash → 8 hex chars
+    let h = 0;
     for (let i = 0; i < raw.length; i++) {
-      h = Math.imul(h, 33) ^ raw.charCodeAt(i);
+      h = (Math.imul(31, h) + raw.charCodeAt(i)) | 0;
     }
     return (h >>> 0).toString(16).padStart(8, '0');
   } catch (e) {
-    return 'fb000000';
+    return 'err00000';
   }
 }
 
 const DEVICE_FP = buildFingerprint();
-console.log('%c[SwimIQ] Device fingerprint: ' + DEVICE_FP,
-  'color:#00d4ff;font-weight:bold;font-family:monospace;font-size:13px;background:#040d18;padding:4px 8px;border-radius:4px');
+
+// Show fingerprint in console AND on screen
+console.log('%c[SwimIQ] Your device fingerprint: ' + DEVICE_FP,
+  'color:#00d4ff;font-weight:bold;font-family:monospace;font-size:14px;background:#040d18;padding:6px 10px;border-radius:4px');
+
+// Inject fingerprint display into the code screen
+document.addEventListener('DOMContentLoaded', function() {
+  var fpEl = document.getElementById('fp-display');
+  if (fpEl) fpEl.textContent = DEVICE_FP;
+});
+// Also set immediately in case DOM is already ready
+(function() {
+  var fpEl = document.getElementById('fp-display');
+  if (fpEl) fpEl.textContent = DEVICE_FP;
+})();
 
 // ── Input styling helpers ──
 function styleInput(id, valid) {
